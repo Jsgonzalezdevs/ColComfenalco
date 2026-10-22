@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: inventario-comfenalco
+    runtime: static
+    buildCommand: npm install --global pnpm@11.25.0 && pnpm install --frozen-lockfile && pnpm build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
