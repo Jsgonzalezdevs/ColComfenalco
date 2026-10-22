@@ -101,9 +101,11 @@ async function fillMissingAssignments(candidates: SourceEntry[], plan: ReturnTyp
       const personId = assignment.person ? peopleIds.get(normalize(assignment.person.name)) || null : null;
       const locationId = assignment.location ? locationIds.get(normalize(assignment.location.name)) || null : null;
       if (asset.person_id && personId && asset.person_id !== personId) conflicts++;
-      if (asset.location_id && locationId && asset.location_id !== locationId) conflicts++;
+      if (asset.status !== 'Por validar' && asset.location_id && locationId && asset.location_id !== locationId) conflicts++;
       const nextPersonId = asset.person_id || personId;
-      const nextLocationId = asset.location_id || locationId;
+      // Imported assets remain provisional until their status is validated. Reapply
+      // the corrected source location to those rows, including earlier bad matches.
+      const nextLocationId = asset.status === 'Por validar' && locationId ? locationId : asset.location_id || locationId;
       if (nextPersonId) linkedPeople++;
       if (nextLocationId) linkedLocations++;
       if (nextPersonId === asset.person_id && nextLocationId === asset.location_id) continue;
@@ -128,6 +130,29 @@ async function fillMissingAssignments(candidates: SourceEntry[], plan: ReturnTyp
   return { updated, conflicts, linkedPeople, linkedLocations };
 }
 
+async function removeUnusedLegacyLocations(plan: ReturnType<typeof buildEnrichmentPlan>) {
+  if (!supabase) throw new Error('No hay conexión con la base de datos.');
+  // Legacy names were intentionally excluded from the new location catalog, so
+  // resolve them against the existing rows before checking whether they are safe to remove.
+  const existing = await supabase.from('locations').select('id,name');
+  if (existing.error) throw existing.error;
+  const idsByName = new Map((existing.data || []).map((location: { id: string; name: string }) => [normalize(location.name), location.id]));
+  const ids = [...plan.legacyLocations.keys()].map(key => idsByName.get(key)).filter((id): id is string => !!id);
+  let removed = 0;
+  for (let start = 0; start < ids.length; start += batchSize) {
+    const group = ids.slice(start, start + batchSize);
+    const usage = await supabase.from('assets').select('location_id').in('location_id', group);
+    if (usage.error) throw usage.error;
+    const used = new Set((usage.data || []).map((asset: { location_id: string }) => asset.location_id));
+    const unused = group.filter(id => !used.has(id));
+    if (!unused.length) continue;
+    const result = await supabase.from('locations').delete().in('id', unused).select('id');
+    if (result.error) throw new Error(`Se corrigieron los vínculos de los activos, pero no se pudieron retirar las ubicaciones mezcladas con descripciones de bienes. Ejecuta supabase/cleanup_imported_locations.sql en Supabase y vuelve a intentar. ${result.error.message}`);
+    removed += result.data?.length || 0;
+  }
+  return removed;
+}
+
 export async function importSourceAssets(reviewDueDate: string, onProgress: (done: number, total: number) => void) {
   if (!supabase) throw new Error('La importación requiere conexión con la base de datos del colegio.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reviewDueDate)) throw new Error('Selecciona la fecha de próxima revisión.');
@@ -138,7 +163,7 @@ export async function importSourceAssets(reviewDueDate: string, onProgress: (don
   const entries = await readAllEntries();
   const candidates = entries.filter(entry => entry.kind === 'asset_candidate');
   const total = candidates.length;
-  if (!total) return { total: 0, inserted: 0, peopleFound: 0, locationsFound: 0, peopleCreated: 0, locationsCreated: 0, assignedPeople: 0, assignedLocations: 0, linkedActas: 0, existingAssetsUpdated: 0, sourceConflicts: 0 };
+  if (!total) return { total: 0, inserted: 0, peopleFound: 0, locationsFound: 0, peopleCreated: 0, locationsCreated: 0, assignedPeople: 0, assignedLocations: 0, linkedActas: 0, existingAssetsUpdated: 0, sourceConflicts: 0, removedLegacyLocations: 0 };
   const plan = buildEnrichmentPlan(entries, [...documentById.values()]);
   const [people, locations] = await Promise.all([
     ensureCatalog('people', plan.people),
@@ -166,6 +191,7 @@ export async function importSourceAssets(reviewDueDate: string, onProgress: (don
   }
 
   const assignments = await fillMissingAssignments(candidates, plan, people.ids, locations.ids);
+  const removedLegacyLocations = await removeUnusedLegacyLocations(plan);
 
   // Attach a source acta to an asset only when the source rows identify a unique acta.
   const actaPairs = candidates.flatMap(entry => {
@@ -192,5 +218,5 @@ export async function importSourceAssets(reviewDueDate: string, onProgress: (don
     }
   }
   if (failedLinks.length) throw new Error(`Se importaron ${inserted} activos, pero no se pudieron resolver ${failedLinks.length} asociaciones a personas o ubicaciones. Puedes volver a intentarlo después de revisar los catálogos.`);
-  return { total, inserted, peopleFound: plan.people.size, locationsFound: plan.locations.size, peopleCreated: people.created, locationsCreated: locations.created, assignedPeople: assignments.linkedPeople, assignedLocations: assignments.linkedLocations, linkedActas, existingAssetsUpdated: assignments.updated, sourceConflicts: assignments.conflicts };
+  return { total, inserted, peopleFound: plan.people.size, locationsFound: plan.locations.size, peopleCreated: people.created, locationsCreated: locations.created, assignedPeople: assignments.linkedPeople, assignedLocations: assignments.linkedLocations, linkedActas, existingAssetsUpdated: assignments.updated, sourceConflicts: assignments.conflicts, removedLegacyLocations };
 }

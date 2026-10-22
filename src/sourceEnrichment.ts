@@ -9,6 +9,7 @@ export type EnrichmentPlan = {
   assignments: Map<string, SourceAssignment>;
   people: Map<string, PersonProposal>;
   locations: Map<string, LocationProposal>;
+  legacyLocations: Map<string, LocationProposal>;
 };
 
 const clean = (value: unknown) => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
@@ -26,7 +27,8 @@ const groupOf = (entry: SourceEntry) => {
   return unit ? `${entry.document_id}:${unit}` : '';
 };
 const parentLocation = (value: string) => /^(m[oó]dulo|bloque|ciclo|sede|unidad infantil|secci[oó]n educativa)\b/i.test(value);
-const locationHeader = (header: string) => /ubicaci[oó]n|localizaci[oó]n|sal[oó]n|aula|espacio|dependencia|(?:^|\s)area(?:\s|$)|bloque|m[oó]dulo|sede/i.test(header);
+const locationHeader = (header: string) => /^(ubicacion( actual| activo| del activo)?|localizacion( actual| activo| del activo)?|salon( de clase)?|aula|espacio( fisico)?|area|dependencia|bloque|modulo|sede|ciclo)$/.test(normalize(header).replace(/[^a-z0-9]+/g, ' ').trim());
+const looseLocationHeader = (header: string) => /ubicaci[oó]n|localizaci[oó]n|sal[oó]n|aula|espacio|dependencia|(?:^|\s)area(?:\s|$)|bloque|m[oó]dulo|sede/i.test(header);
 const responsibleHeader = (header: string) => /responsable|encargado|custodio|asignado a/i.test(header) && !/tercero responsable/i.test(header);
 const isPlateHeader = (value: string) => ['placa', 'placa inventario', 'placa / activo', 'placa/activo', 'n° placa', 'no. placa', 'no placa'].includes(value);
 const isDescriptionHeader = (value: string) => ['descripcion', 'descripcion placa / activo', 'detalle del activo', 'activos', 'activo', 'activoactivos'].includes(value);
@@ -119,6 +121,7 @@ export function buildEnrichmentPlan(entries: SourceEntry[], sourceDocuments: Sou
     if (key) groups.set(key, [...(groups.get(key) || []), entry]);
   }
   const headers = new Map<string, { people: string[]; locations: string[] }>();
+  const legacyHeaders = new Map<string, string[]>();
   for (const [group, rows] of groups) {
     const ordered = rows.slice().sort((a, b) => a.ordinal - b.ordinal);
     for (const row of ordered) {
@@ -131,6 +134,7 @@ export function buildEnrichmentPlan(entries: SourceEntry[], sourceDocuments: Sou
         people: normalized.filter(([, value]) => responsibleHeader(value)).map(([key]) => key),
         locations: normalized.filter(([, value]) => locationHeader(value)).map(([key]) => key),
       });
+      legacyHeaders.set(group, normalized.filter(([, value]) => looseLocationHeader(value) && !locationHeader(value)).map(([key]) => key));
       break;
     }
   }
@@ -138,6 +142,7 @@ export function buildEnrichmentPlan(entries: SourceEntry[], sourceDocuments: Sou
   const custodianByActa = actaCustodians(entries, documents);
   const people = new Map<string, PersonProposal>();
   const locations = new Map<string, LocationProposal>();
+  const legacyLocations = new Map<string, LocationProposal>();
   const assignments = new Map<string, SourceAssignment>();
   const byPlate = new Map<string, SourceAssignment[]>();
   const candidates = entries.filter(entry => entry.kind === 'asset_candidate');
@@ -153,6 +158,9 @@ export function buildEnrichmentPlan(entries: SourceEntry[], sourceDocuments: Sou
     const person = directPerson ? { name: directPerson, position: actaPerson && normalize(actaPerson.name) === normalize(directPerson) ? actaPerson.position : 'Responsable según archivo' } : actaPerson;
     const locationValues = header?.locations.map(key => clean(cells.get(key))).filter(Boolean) || [];
     const location = canonicalLocation(locationValues) || fileLocation(doc, person);
+    const pollutedValues = [...locationValues, ...(legacyHeaders.get(groupOf(entry)) || []).map(key => clean(cells.get(key))).filter(Boolean)];
+    const legacyLocation = location && pollutedValues.length > locationValues.length ? canonicalLocation(pollutedValues) : undefined;
+    if (legacyLocation) addLocation(legacyLocations, legacyLocation);
     const assignment: SourceAssignment = { ...(person ? { person } : {}), ...(location ? { location } : {}), ...(actaPerson ? { actaDocumentId: doc.id } : {}) };
     if (person) addPerson(people, person);
     if (location) addLocation(locations, location);
@@ -186,5 +194,5 @@ export function buildEnrichmentPlan(entries: SourceEntry[], sourceDocuments: Sou
     assignments.set(entry.id, next);
   }
 
-  return { assignments, people, locations };
+  return { assignments, people, locations, legacyLocations };
 }

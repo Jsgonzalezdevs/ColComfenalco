@@ -20,6 +20,17 @@ describe('asociaciones de datos de origen', () => {
     expect(plan.locations.size).toBe(1);
   });
 
+  it('no convierte una columna de activos por entregar en una ubicación', () => {
+    const docs: SourceDocument[] = [{ id: inventoryId, path: 'Inventario.xlsx', category: 'Inventario' }];
+    const entries = [
+      row('header', inventoryId, 0, 'sheet_row', { sheet: 'Activos', cells: { A: { value: 'PLACA' }, B: { value: 'DESCRIPCION' }, E: { value: 'UBICACIÓN ACTIVO' }, F: { value: 'UBICACIÓN' }, K: { value: 'ACTIVOS A ENTREGAR EN: MODULO DOS 1 P LAB DE FISICA' } } }),
+      row('asset', inventoryId, 1, 'asset_candidate', { sheet: 'Activos', cells: { A: { value: '137153' }, B: { value: 'BUTACA PARA LABORATORIO' }, E: { value: 'MODULO DOS' }, F: { value: 'PRIMER PISO LABORATORIO DE FISICA' }, K: { value: '1 SILLA ISOCELES S/BRAZOS VERDE TAPIZADAS' } }, asset_proposal: { plate_as_written: '137153', descriptions: ['BUTACA PARA LABORATORIO'] } }),
+    ];
+    const plan = buildEnrichmentPlan(entries, docs);
+    expect(plan.assignments.get('asset')?.location).toEqual({ name: 'PRIMER PISO LABORATORIO DE FISICA · MODULO DOS', block: 'MODULO DOS' });
+    expect([...plan.legacyLocations.values()].some(location => location.name.includes('1 SILLA ISOCELES S/BRAZOS VERDE TAPIZADAS'))).toBe(true);
+  });
+
   it('usa el acta cuando su nombre coincide con la persona firmante y la placa coincide', () => {
     const docs: SourceDocument[] = [
       { id: actaId, path: 'ACTAS/ACTA DE ENTREGA DE ACTIVOS ANA PEREZ.docx', category: 'Acta', format: 'docx', byte_size: 100 },
