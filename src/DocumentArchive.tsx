@@ -4,6 +4,7 @@ import { archivePageSize, downloadOriginal, findEntries, getOriginalBlob, listDo
 import type { ArchiveDocument } from './archive';
 import { importSourceAssets } from './sourceImport';
 import { configured, supabase } from './repository';
+import WordPreview from './WordPreview';
 
 const message = (error: unknown) => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : 'No se pudo completar la operación.';
 const fileName = (path: string) => path.split('/').pop() || path;
@@ -25,6 +26,7 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
   const [selected, setSelected] = useState<ArchiveDocument | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewText, setPreviewText] = useState('');
+  const [previewWord, setPreviewWord] = useState<Blob | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
 
@@ -63,6 +65,7 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
   async function openDocument(document: ArchiveDocument) {
     setSelected(document);
     setPreviewText('');
+    setPreviewWord(null);
     setPreviewError('');
     setPreviewLoading(true);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -73,9 +76,7 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
       if (format === 'pdf') {
         setPreviewUrl(URL.createObjectURL(blob));
       } else if (format === 'docx') {
-        const { extractRawText } = await import('mammoth');
-        const result = await extractRawText({ arrayBuffer: await blob.arrayBuffer() });
-        setPreviewText(result.value.trim() || 'Este archivo no contiene texto para mostrar.');
+        setPreviewWord(blob);
       } else {
         const pieces: string[] = [];
         const pages = Math.min(10, Math.ceil(document.entry_count / archivePageSize));
@@ -134,7 +135,7 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
 
     {selected && <section className="panel source-preview" aria-live="polite">
       <div className="section-title"><div><span className="eyebrow">VISTA DE LECTURA</span><h2>{fileName(selected.path)}</h2><p>{sourceFolder(selected.path)}</p></div><div className="source-preview-actions"><button className="secondary" onClick={() => void downloadDocument(selected)}><Download size={16}/>Descargar original</button><button className="icon-button" aria-label="Cerrar vista" onClick={() => setSelected(null)}><X size={19}/></button></div></div>
-      {previewLoading ? <div className="empty"><p>Abriendo archivo…</p></div> : previewError ? <div className="error-panel" role="alert">{previewError}</div> : previewUrl ? <iframe className="source-pdf" src={previewUrl} title={`Vista previa de ${fileName(selected.path)}`} /> : <pre className="source-text">{previewText}</pre>}
+      {previewLoading ? <div className="empty"><p>Abriendo archivo…</p></div> : previewError ? <div className="error-panel" role="alert">{previewError}</div> : previewUrl ? <iframe className="source-pdf" src={previewUrl} title={`Vista previa de ${fileName(selected.path)}`} /> : previewWord ? <WordPreview key={selected.id} blob={previewWord} label={fileName(selected.path)} /> : <pre className="source-text">{previewText}</pre>}
       <p className="field-help">La vista sirve para consultar el contenido en el navegador. El botón conserva la descarga del archivo original.</p>
     </section>}
 

@@ -3,6 +3,7 @@ import { Download, Eye, FileText, Link2, Paperclip } from 'lucide-react';
 import { downloadOriginal, getOriginalBlob, listDocuments } from './archive';
 import type { ArchiveDocument } from './archive';
 import { supabase } from './repository';
+import WordPreview from './WordPreview';
 
 type AssetDocument = { id: string; asset_id: string; archive_document_id: string | null; storage_path: string | null; filename: string; mime_type: string; byte_size: number; preview_text: string | null; created_at: string };
 const accepted = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png']);
@@ -13,7 +14,7 @@ export default function AssetDocuments({ assetId, sourceDocumentId = null, isAdm
   const [items, setItems] = useState<AssetDocument[]>([]);
   const [archive, setArchive] = useState<ArchiveDocument[]>([]);
   const [linkId, setLinkId] = useState('');
-  const [preview, setPreview] = useState<{ title: string; mime: string; url?: string; text?: string } | null>(null);
+  const [preview, setPreview] = useState<{ title: string; mime: string; url?: string; word?: Blob } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
@@ -45,7 +46,11 @@ export default function AssetDocuments({ assetId, sourceDocumentId = null, isAdm
     setPreview(null);
     try {
       const isArchive = 'path' in item;
-      const type = isArchive ? (item.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') : (item.mime_type || mime);
+      const title = isArchive ? item.path.split('/').pop()! : item.filename;
+      const storedType = isArchive ? '' : item.mime_type || mime;
+      const type = isArchive
+        ? (item.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        : (/\.docx$/i.test(title) ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : storedType);
       let blob: Blob | null;
       if (isArchive) blob = await getOriginalBlob(item);
       else {
@@ -55,11 +60,9 @@ export default function AssetDocuments({ assetId, sourceDocumentId = null, isAdm
       }
       if (!blob) throw new Error('No se pudo leer el archivo guardado.');
       if (type === 'application/pdf' || type.startsWith('image/')) {
-        setPreview({ title: isArchive ? item.path.split('/').pop()! : item.filename, mime: type, url: URL.createObjectURL(blob) });
+        setPreview({ title, mime: type, url: URL.createObjectURL(blob) });
       } else if (type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        const { extractRawText } = await import('mammoth');
-        const text = isArchive ? (await extractRawText({ arrayBuffer: await blob.arrayBuffer() })).value : ('preview_text' in item ? item.preview_text || '' : '');
-        setPreview({ title: isArchive ? item.path.split('/').pop()! : item.filename, mime: type, text: text.trim() || 'Este documento no contiene texto para mostrar.' });
+        setPreview({ title, mime: type, word: blob });
       } else {
         throw new Error('Esta versión se puede descargar, pero no tiene vista de lectura en el navegador.');
       }
@@ -92,14 +95,9 @@ export default function AssetDocuments({ assetId, sourceDocumentId = null, isAdm
     const extension = file.name.split('.').pop()?.toLowerCase() || 'file';
     const path = `${assetId}/${crypto.randomUUID()}.${extension}`;
     try {
-      let previewText: string | null = null;
-      if (/\.docx$/i.test(file.name)) {
-        const { extractRawText } = await import('mammoth');
-        previewText = (await extractRawText({ arrayBuffer: await file.arrayBuffer() })).value.slice(0, 200000);
-      }
       const uploadResult = await supabase!.storage.from('asset-actas').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
       if (uploadResult.error) throw uploadResult.error;
-      const insert = await supabase!.from('asset_documents').insert({ asset_id: assetId, storage_path: path, filename: file.name, mime_type: file.type || 'application/octet-stream', byte_size: file.size, preview_text: previewText });
+      const insert = await supabase!.from('asset_documents').insert({ asset_id: assetId, storage_path: path, filename: file.name, mime_type: file.type || 'application/octet-stream', byte_size: file.size });
       if (insert.error) { await supabase!.storage.from('asset-actas').remove([path]); throw insert.error; }
       await refresh();
     } catch (e) { setError(message(e)); }
@@ -130,7 +128,7 @@ export default function AssetDocuments({ assetId, sourceDocumentId = null, isAdm
     {isAdmin && availableActs.length > 0 && <div className="link-acta-row"><label>Vincular un acta que ya está en los archivos<select value={linkId} onChange={e => setLinkId(e.target.value)}><option value="">Selecciona un acta…</option>{availableActs.map(document => <option key={document.id} value={document.id}>{document.path.split('/').pop()}</option>)}</select></label><button className="secondary" disabled={!linkId || busy} onClick={() => void linkExisting()}><Link2 size={16}/>Vincular</button></div>}
     {!sourceDocument && !items.length && <p className="empty-documents">Aún no hay documentos vinculados.</p>}
     {error && <p className="error" role="alert">{error}</p>}
-    {preview && <div className="document-reader"><div className="document-reader-heading"><strong>{preview.title}</strong><button className="text-button" onClick={() => setPreview(null)}>Cerrar vista</button></div>{preview.url ? preview.mime.startsWith('image/') ? <img src={preview.url} alt={`Vista de ${preview.title}`}/> : <iframe title={`Vista de ${preview.title}`} src={preview.url}/> : <pre>{preview.text}</pre>}</div>}
+    {preview && <div className="document-reader"><div className="document-reader-heading"><strong>{preview.title}</strong><button className="text-button" onClick={() => setPreview(null)}>Cerrar vista</button></div>{preview.url ? preview.mime.startsWith('image/') ? <img src={preview.url} alt={`Vista de ${preview.title}`}/> : <iframe title={`Vista de ${preview.title}`} src={preview.url}/> : preview.word ? <WordPreview key={preview.title} blob={preview.word} label={preview.title}/> : null}</div>}
     {busy && <small className="field-help">Procesando documento…</small>}
   </section>;
 }
