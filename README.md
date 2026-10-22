@@ -1,6 +1,6 @@
 # Activos · Colegio Comfenalco Ibagué
 
-Aplicación web en React, TypeScript y Vite. Versión inicial 0.1.0. Compatible con navegadores modernos en Windows y macOS; diseño adaptable a pantallas pequeñas.
+Aplicación web en React, TypeScript y Vite. Versión inicial 0.2.0. Compatible con navegadores modernos en Windows y macOS; diseño adaptable a pantallas pequeñas.
 
 ## Ejecutar
 
@@ -26,7 +26,21 @@ Sin variables de entorno abre una **demostración con información ficticia** y 
 - CSV compatible con Excel (separador punto y coma), reporte de novedades e impresión / PDF desde el navegador.
 - Acceso por correo/contraseña cuando se configura Supabase; roles viewer, editor y admin.
 
-**Pendiente:** importación asistida de los Excel/Word originales, aprobación formal de bajas, actas institucionales, firmas, fotos, edición de catálogos, paginación para inventarios grandes y recuperación de contraseña desde la aplicación. Pendiente de baja es un estado de seguimiento, no una aprobación. La impresión es un listado de inventario, no un acta de entrega.
+**Documentos:** archivo institucional disponible exclusivamente para administradores. Permite buscar el contenido de Excel, Word y PDF, filtrar por documento o tipo de contenido, consultar coordenadas de origen y descargar originales comprobados mediante SHA-256. Las filas de posibles activos se conservan como propuestas por conciliar; no se suman automáticamente al inventario. «Preparar activo» abre un formulario que exige verificar estado y ubicación, conserva la referencia de origen y valida duplicidad de placa al guardar.
+
+**Pendiente:** conciliación institucional de las propuestas, aprobación formal de bajas, actas institucionales nuevas, firmas, fotos, edición de catálogos, paginación del inventario confirmado y recuperación de contraseña desde la aplicación. Documentos sí tiene paginación desde la base de datos. Pendiente de baja es un estado de seguimiento, no una aprobación. La impresión es un listado de inventario, no un acta de entrega.
+
+## Archivo completo de las fuentes
+
+El 22 de octubre de 2026 se cargaron y verificaron en el proyecto de la aplicación **55 originales y 7.484 fragmentos**, incluidos los dos Excel antiguos `.xls` y las imágenes con texto de los Word. Se identificaron 4.642 filas que podrían describir activos; esta cifra no es un total de bienes únicos. Las copias temporales `~$` de Office no son documentos fuente y se excluyeron (3 archivos). Los originales locales no se modificaron.
+
+Las tablas `archive_documents`, `archive_originals` y `archive_entries` tienen RLS y acceso exclusivo para `members.role = 'admin'`. No se conceden permisos de modificación o eliminación de documentos ya archivados. El RPC `import_archive_document` es SECURITY INVOKER, valida el original y sus filas en una sola transacción por documento y permite reintentar el mismo paquete sin duplicarlo. Un paquete interrumpido puede reanudarse. El archivo original completo se guarda codificado en base64, incluso si tiene elementos que el extractor no interpreta.
+
+Para un proyecto nuevo, ejecutar primero `supabase/setup.sql` y luego `supabase/archive.sql`, una sola vez. En el proyecto actual ambos pasos ya están realizados. Los archivos originales y paquetes de importación contienen información interna: **no copiarlos a `public/`, `dist/` ni al repositorio**. La interfaz recibe los datos después de autenticar y autorizar al administrador.
+
+Herramientas de preparación: `scripts/prepare_import.py` usa Python con openpyxl, xlrd 2.0.2, python-docx y pypdf. Acepta carpeta fuente, carpeta de salida privada y, opcionalmente, el JSONL de OCR generado con `scripts/ocr_images.swift` (macOS Vision; requiere un SDK compatible con el compilador). La extracción conserva los valores, las fórmulas Excel y las coordenadas de origen; el OCR se marca siempre para revisión. Las propuestas no eligen entre descripciones contradictorias ni resuelven responsables o traslados por su cuenta.
+
+`scripts/upload_archive.py` carga el paquete con una sesión temporal de administrador desde fuera del repositorio y después compara todos los originales y filas descargados contra el paquete local. No necesita una clave service_role. `scripts/check_archive_sql.mjs` verifica con PostgreSQL local/PGlite la carga íntegra, reintentos, rechazo de alteraciones y acceso denegado a viewer, no miembro y anon. También se verificó en la API real que los visitantes sin sesión no pueden consultar las tres tablas.
 
 ## Conectar Supabase
 
@@ -55,7 +69,7 @@ Usar la clave **publishable**. Nunca poner `service_role`, claves secretas o con
 
 Todas las tablas tienen RLS. Los usuarios solo acceden si están en `members`; nadie puede autoasignarse un rol desde la API. No hay permisos de borrado de activos ni escritura directa del historial. El disparador privado escribe la bitácora en la misma transacción, fija usuario/fecha y exige una versión consecutiva. El cliente actualiza con el filtro `id + version` para detectar conflictos.
 
-Antes de uso institucional, probar contra el proyecto real: visitante sin acceso, usuario sin membresía, viewer sin escritura, editor con escritura, bitácora inmutable, placas duplicadas, traslado y conflicto entre dos sesiones. Ejecutar los asesores de seguridad de Supabase. **Este SQL todavía no se ha ejecutado ni validado contra una instancia real.** No se requiere un servidor Render adicional para esta arquitectura.
+Antes de uso institucional del inventario consolidado, completar las pruebas de editor con escritura, bitácora inmutable, traslado y conflicto entre dos sesiones contra la instancia real. El archivo documental ya fue cargado y verificado con acceso admin y bloqueo anónimo. Las políticas de viewer/no miembro y la integridad del RPC de archivo también se probaron en PostgreSQL local. Quedan pendientes los asesores de Supabase: la conexión MCP disponible no tiene acceso a este proyecto. No se requiere un servidor Render adicional para esta arquitectura.
 
 ## Publicar en Vercel
 
@@ -89,4 +103,4 @@ Verde principal `#006830`, acento `#95BF0C`, verde lima `#BFD730`, tomados del C
 - Auth: https://supabase.com/docs/guides/auth/quickstarts/react
 - RLS: https://supabase.com/docs/guides/database/postgres/row-level-security
 
-Los archivos fuente del inventario no se modificaron ni se copiaron a la aplicación.
+Los archivos fuente del inventario no se modificaron. Sus copias están en las tablas protegidas de Supabase y no se incluyen en el código estático de la aplicación.
