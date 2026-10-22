@@ -62,10 +62,15 @@ export async function importPackage(p:ArchivePackage,onProgress:(completed:numbe
  for(const d of p.documents)if(!stored.some(s=>s.id===d.id&&s.sha256===d.sha256&&s.entry_count===d.entry_count))throw new Error('La verificación final no coincide con el paquete.');
 }
 export async function downloadOriginal(document:ArchiveDocument){
+ const blob=await getOriginalBlob(document);
+ const url=URL.createObjectURL(blob);
+ const a=window.document.createElement('a');a.href=url;a.download=document.path.split('/').pop()!;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+export async function getOriginalBlob(document:ArchiveDocument){
  if(!supabase)throw new Error('No hay conexión.');
  const result=await supabase.from('archive_originals').select('original_base64').eq('document_id',document.id).single();
  if(result.error)throw result.error;
  const bytes=await verifyOriginal(document,result.data.original_base64);
- const url=URL.createObjectURL(new Blob([bytes]));
- const a=window.document.createElement('a');a.href=url;a.download=document.path.split('/').pop()!;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ const mime:Record<string,string>={pdf:'application/pdf',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',xls:'application/vnd.ms-excel'};
+ return new Blob([bytes],{type:mime[document.format.toLowerCase()]||'application/octet-stream'});
 }

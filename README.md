@@ -26,7 +26,11 @@ Sin variables de entorno abre una **demostración con información ficticia** y 
 - CSV compatible con Excel (separador punto y coma), reporte de novedades e impresión / PDF desde el navegador.
 - Acceso por correo/contraseña cuando se configura Supabase; roles viewer, editor y admin.
 
-**Documentos:** archivo institucional disponible exclusivamente para administradores. Permite buscar el contenido de Excel, Word y PDF, filtrar por documento o tipo de contenido, consultar coordenadas de origen y descargar originales comprobados mediante SHA-256. Las filas de posibles activos se conservan como propuestas por conciliar; no se suman automáticamente al inventario. «Preparar activo» abre un formulario que exige verificar estado y ubicación, conserva la referencia de origen y valida duplicidad de placa al guardar.
+**Archivos del colegio:** sección exclusiva para administradores. Muestra los 55 documentos originales de forma legible; permite abrir PDF y Word en el navegador y conservar la descarga del original. Las hojas de cálculo se consultan mediante el texto extraído. Ya no muestra coordenadas internas ni bloques JSON en la pantalla.
+
+**Importación guiada:** los 4.642 registros detectados se pueden agregar al inventario con una fecha de próxima revisión elegida por el administrador. Cada registro queda como «Por validar»; no se inventan placas, estados, ubicaciones ni responsables. Se conservan todos los campos de origen, las repeticiones y los datos que requieren conciliación. La importación se puede reintentar sin duplicar filas.
+
+**Actas:** cada ficha permite vincular un acta del archivo original o adjuntar un PDF, Word o imagen de hasta 20 MB. Administradores pueden consultar el contenido dentro del sistema y descargar el archivo original. Los documentos nuevos se guardan en un bucket privado.
 
 **Pendiente:** conciliación institucional de las propuestas, aprobación formal de bajas, actas institucionales nuevas, firmas, fotos, edición de catálogos, paginación del inventario confirmado y recuperación de contraseña desde la aplicación. Documentos sí tiene paginación desde la base de datos. Pendiente de baja es un estado de seguimiento, no una aprobación. La impresión es un listado de inventario, no un acta de entrega.
 
@@ -36,7 +40,7 @@ El 22 de octubre de 2026 se cargaron y verificaron en el proyecto de la aplicaci
 
 Las tablas `archive_documents`, `archive_originals` y `archive_entries` tienen RLS y acceso exclusivo para `members.role = 'admin'`. No se conceden permisos de modificación o eliminación de documentos ya archivados. El RPC `import_archive_document` es SECURITY INVOKER, valida el original y sus filas en una sola transacción por documento y permite reintentar el mismo paquete sin duplicarlo. Un paquete interrumpido puede reanudarse. El archivo original completo se guarda codificado en base64, incluso si tiene elementos que el extractor no interpreta.
 
-Para un proyecto nuevo, ejecutar primero `supabase/setup.sql` y luego `supabase/archive.sql`, una sola vez. En el proyecto actual ambos pasos ya están realizados. Los archivos originales y paquetes de importación contienen información interna: **no copiarlos a `public/`, `dist/` ni al repositorio**. La interfaz recibe los datos después de autenticar y autorizar al administrador.
+Para un proyecto nuevo, ejecutar primero `supabase/setup.sql` y luego `supabase/archive.sql`, una sola vez. La actualización aditiva `supabase/review_and_documents.sql` habilita los registros pendientes, las fechas de revisión y los documentos privados por activo; ya fue aplicada en el proyecto actual. Los archivos originales y paquetes de importación contienen información interna: **no copiarlos a `public/`, `dist/` ni al repositorio**. La interfaz recibe los datos después de autenticar y autorizar al administrador.
 
 Herramientas de preparación: `scripts/prepare_import.py` usa Python con openpyxl, xlrd 2.0.2, python-docx y pypdf. Acepta carpeta fuente, carpeta de salida privada y, opcionalmente, el JSONL de OCR generado con `scripts/ocr_images.swift` (macOS Vision; requiere un SDK compatible con el compilador). La extracción conserva los valores, las fórmulas Excel y las coordenadas de origen; el OCR se marca siempre para revisión. Las propuestas no eligen entre descripciones contradictorias ni resuelven responsables o traslados por su cuenta.
 
