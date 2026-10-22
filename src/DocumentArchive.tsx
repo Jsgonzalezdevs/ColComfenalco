@@ -18,6 +18,7 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
   const [reviewDate, setReviewDate] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [canRetryImport, setCanRetryImport] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [schemaReady, setSchemaReady] = useState(false);
@@ -51,6 +52,7 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
       setCandidateCount(source.count || 0);
       setPendingCount(pending.count || 0);
     } catch (e) {
+      setCanRetryImport(false);
       setError(message(e));
     } finally {
       setLoading(false);
@@ -102,7 +104,7 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
   async function importRecords() {
     if (!schemaReady) { setError('Primero debe quedar lista la actualización de la base de datos.'); return; }
     if (!reviewDate) { setError('Selecciona la fecha en que volverán a validar estos registros.'); return; }
-    setBusy(true); setError(''); setNotice(''); setProgress({ done: 0, total: candidateCount });
+    setBusy(true); setError(''); setNotice(''); setCanRetryImport(false); setProgress({ done: 0, total: candidateCount });
     try {
       const result = await importSourceAssets(reviewDate, (done, total) => setProgress({ done, total }));
       const changed = result.inserted + result.peopleCreated + result.locationsCreated + result.existingAssetsUpdated + result.linkedActas;
@@ -112,6 +114,7 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
       await refresh();
       onImported();
     } catch (e) {
+      setCanRetryImport(true);
       setError(message(e));
     } finally {
       setBusy(false); setProgress(null);
@@ -133,7 +136,7 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
       {notice && <div className="success-panel" role="status">{notice}<button className="text-button" onClick={onImported}>Ver inventario<ArrowUpRight size={15}/></button></div>}
     </section>
 
-    {error && <div className="error-panel" role="alert"><span>{error}</span><button disabled={busy} onClick={() => void refresh()}>Reintentar</button></div>}
+    {error && <div className="error-panel" role="alert"><span>{error}</span><button disabled={busy} onClick={() => canRetryImport ? void importRecords() : void refresh()}>{canRetryImport ? 'Reintentar importación' : 'Comprobar de nuevo'}</button></div>}
 
     {selected && <section className="panel source-preview" aria-live="polite">
       <div className="section-title"><div><span className="eyebrow">VISTA DE LECTURA</span><h2>{fileName(selected.path)}</h2><p>{sourceFolder(selected.path)}</p></div><div className="source-preview-actions"><button className="secondary" onClick={() => void downloadDocument(selected)}><Download size={16}/>Descargar original</button><button className="icon-button" aria-label="Cerrar vista" onClick={() => setSelected(null)}><X size={19}/></button></div></div>
