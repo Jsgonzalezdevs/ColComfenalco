@@ -105,9 +105,10 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
     setBusy(true); setError(''); setNotice(''); setProgress({ done: 0, total: candidateCount });
     try {
       const result = await importSourceAssets(reviewDate, (done, total) => setProgress({ done, total }));
-      setNotice(result.inserted
-        ? `${result.inserted.toLocaleString('es-CO')} registros agregados al inventario para validar. La fecha de revisión quedó guardada.`
-        : 'Todos los registros ya estaban en el inventario. No se crearon duplicados.');
+      const changed = result.inserted + result.peopleCreated + result.locationsCreated + result.existingAssetsUpdated + result.linkedActas;
+      setNotice(changed
+        ? `${result.inserted.toLocaleString('es-CO')} activos nuevos y ${result.existingAssetsUpdated.toLocaleString('es-CO')} activos actualizados con asociaciones. Se encontraron ${result.peopleFound} responsables y ${result.locationsFound} ubicaciones; se crearon ${result.peopleCreated} responsables y ${result.locationsCreated} ubicaciones nuevas. Quedaron vinculados ${result.assignedPeople.toLocaleString('es-CO')} activos con su responsable y ${result.assignedLocations.toLocaleString('es-CO')} con ubicación; se asociaron ${result.linkedActas} actas. La fecha de revisión quedó guardada.${result.sourceConflicts ? ` ${result.sourceConflicts} datos de origen diferían de asociaciones ya guardadas y se conservaron para revisión.` : ''}`
+        : `Los ${result.total.toLocaleString('es-CO')} registros ya estaban completos. No había responsables, ubicaciones ni actas pendientes de vincular.`);
       await refresh();
       onImported();
     } catch (e) {
@@ -122,10 +123,11 @@ export default function Archive({ isAdmin, onImported }: { isAdmin: boolean; onI
 
   return <div className="archive-page">
     <section className="panel import-guide">
-      <div className="import-guide-heading"><span className="import-summary-icon"><Upload size={22}/></span><div><span className="eyebrow">IMPORTACIÓN GUIADA</span><h2>Traer los registros al inventario</h2><p>Los datos se guardarán como <strong>Por validar</strong>. No se asignará una ubicación ni se confirmará un estado automáticamente.</p></div></div>
+      <div className="import-guide-heading"><span className="import-summary-icon"><Upload size={22}/></span><div><span className="eyebrow">IMPORTACIÓN GUIADA</span><h2>Traer los registros al inventario</h2><p>Los activos quedarán <strong>Por validar</strong>; las personas, ubicaciones y actas identificadas se crearán y asociarán desde los archivos.</p></div></div>
       <div className="import-guide-stats"><div><strong>{candidateCount.toLocaleString('es-CO')}</strong><span>registros encontrados en los archivos</span></div><div><strong>{pendingCount.toLocaleString('es-CO')}</strong><span>pendientes de validar en el inventario</span></div><div><strong>{documents.length}</strong><span>archivos originales conservados</span></div></div>
       {schemaMessage && <div className="error-panel" role="alert">{schemaMessage}<button disabled={busy} onClick={() => void refresh()}>Comprobar de nuevo</button></div>}
       <div className="import-date-row"><label>Fecha para volver a revisar el estado de estos registros<input type="date" value={reviewDate} min={`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`} onChange={e => setReviewDate(e.target.value)} required/></label><button className="primary" disabled={busy || loading || !candidateCount || !schemaReady} onClick={() => void importRecords()}>{busy ? 'Importando…' : loading ? 'Revisando sistema…' : pendingCount ? 'Continuar importación' : 'Importar registros'}<ArrowUpRight size={17}/></button></div>
+      <p className="field-help">También se crearán las personas y ubicaciones escritas en los archivos. El sistema asociará cada activo cuando encuentre una relación clara; si hay dudas o datos contradictorios, quedará pendiente para revisión. Las actas se vincularán cuando el archivo identifique al responsable y la placa del bien.</p>
       <p className="field-help">Las placas repetidas, los datos incompletos y las filas de traslados o bajas quedarán marcadas para que el equipo las concilie. La importación se puede reintentar sin crear duplicados.</p>
       {progress && <div className="import-progress" role="status"><div><span>Preparando el inventario</span><strong>{progress.done.toLocaleString('es-CO')} de {progress.total.toLocaleString('es-CO')}</strong></div><progress max={progress.total || 1} value={progress.done}/></div>}
       {notice && <div className="success-panel" role="status">{notice}<button className="text-button" onClick={onImported}>Ver inventario<ArrowUpRight size={15}/></button></div>}
