@@ -82,7 +82,7 @@ async function ensureCatalog<T extends PersonProposal | LocationProposal>(kind: 
   return { ids, created };
 }
 
-async function fillMissingAssignments(candidates: SourceEntry[], plan: ReturnType<typeof buildEnrichmentPlan>, peopleIds: Map<string, string>, locationIds: Map<string, string>, documents: Map<string, SourceDocument>) {
+async function fillMissingAssignments(candidates: SourceEntry[], plan: ReturnType<typeof buildEnrichmentPlan>, peopleIds: Map<string, string>, locationIds: Map<string, string>) {
   if (!supabase) throw new Error('No hay conexión con la base de datos.');
   let updated = 0;
   let conflicts = 0;
@@ -93,7 +93,7 @@ async function fillMissingAssignments(candidates: SourceEntry[], plan: ReturnTyp
     const result = await supabase.from('assets').select('*').in('source_entry_id', rows.map(entry => entry.id));
     if (result.error) throw result.error;
     const assetByEntry = new Map((result.data || []).map((asset: Asset) => [asset.source_entry_id, asset]));
-    const updates: Asset[] = [];
+    const updates = new Map<string, { version: number; personId: string | null; locationId: string | null; ids: string[] }>();
     for (const entry of rows) {
       const asset = assetByEntry.get(entry.id);
       if (!asset) continue;
@@ -107,21 +107,22 @@ async function fillMissingAssignments(candidates: SourceEntry[], plan: ReturnTyp
       if (nextPersonId) linkedPeople++;
       if (nextLocationId) linkedLocations++;
       if (nextPersonId === asset.person_id && nextLocationId === asset.location_id) continue;
-      const source = documents.get(entry.document_id);
-      const sourceName = source?.path || 'el archivo de origen';
-      const relation = [!asset.person_id && personId ? `responsable ${assignment.person?.name}` : '', !asset.location_id && locationId ? `ubicación ${assignment.location?.name}` : ''].filter(Boolean).join(' y ');
-      updates.push({
-        ...asset,
-        person_id: nextPersonId,
-        location_id: nextLocationId,
-        version: asset.version + 1,
-        action_note: `Asociación inicial completada desde ${sourceName}: ${relation}.`,
-      });
+      const key = JSON.stringify([asset.version, nextPersonId, nextLocationId]);
+      const group = updates.get(key) || { version: asset.version, personId: nextPersonId, locationId: nextLocationId, ids: [] };
+      group.ids.push(asset.id);
+      updates.set(key, group);
     }
-    for (let offset = 0; offset < updates.length; offset += batchSize) {
-      const saved = await supabase.from('assets').upsert(updates.slice(offset, offset + batchSize), { onConflict: 'id' }).select('id');
-      if (saved.error) throw new Error(`Se importaron los catálogos y ${updated} asociaciones antes del error: ${saved.error.message}. Puedes volver a intentarlo.`);
-      updated += saved.data?.length || 0;
+    const groups = [...updates.values()];
+    for (let offset = 0; offset < groups.length; offset += 10) {
+      const savedGroups = await Promise.all(groups.slice(offset, offset + 10).map(group => supabase!.from('assets')
+        .update({ person_id: group.personId, location_id: group.locationId, version: group.version + 1, action_note: 'Asociación inicial completada desde los archivos importados.' })
+        .in('id', group.ids)
+        .eq('version', group.version)
+        .select('id')));
+      const failed = savedGroups.find(saved => saved.error);
+      if (failed?.error) throw new Error(`Se importaron los catálogos y ${updated} asociaciones antes del error: ${failed.error.message}. Puedes volver a intentarlo.`);
+      updated += savedGroups.reduce((total, saved) => total + (saved.data?.length || 0), 0);
+      conflicts += savedGroups.reduce((total, saved, index) => total + (groups[offset + index].ids.length - (saved.data?.length || 0)), 0);
     }
   }
   return { updated, conflicts, linkedPeople, linkedLocations };
@@ -164,7 +165,7 @@ export async function importSourceAssets(reviewDueDate: string, onProgress: (don
       onProgress(Math.min(start + batch.length, total), total);
   }
 
-  const assignments = await fillMissingAssignments(candidates, plan, people.ids, locations.ids, documentById);
+  const assignments = await fillMissingAssignments(candidates, plan, people.ids, locations.ids);
 
   // Attach a source acta to an asset only when the source rows identify a unique acta.
   const actaPairs = candidates.flatMap(entry => {
