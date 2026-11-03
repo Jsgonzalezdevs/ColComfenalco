@@ -22,6 +22,7 @@ Sin variables de entorno abre una **demostración con información ficticia** y 
 - El formulario de activos no obliga a completar campos; lo que falte queda pendiente de validar.
 - La placa se activa con el botón «¿Tiene placa?»; si no se activa, el activo queda registrado sin placa.
 - Las ubicaciones se pueden editar sin perder los activos asociados.
+- Se permite repetir el nombre de un espacio en bloques distintos; dentro del mismo bloque debe ser único.
 - Buscar por descripción, placa, categoría o responsable y filtrar por estado/ubicación.
 - Crear responsables y ubicaciones; consultar sus activos.
 - Trasladar un registro completo y conservar antes/después.

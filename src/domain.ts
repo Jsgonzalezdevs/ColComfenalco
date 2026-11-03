@@ -6,6 +6,7 @@ export type Asset = { id: string; plate: string | null; name: string; category: 
 export type Movement = { id: string; asset_id: string; asset_name: string; action: string; note: string; created_at: string; actor: string; before: Asset | null; after: Asset };
 export type Data = { assets: Asset[]; people: Person[]; locations: Location[]; movements: Movement[] };
 export const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+export const locationKey = (location: Pick<Location, 'name' | 'block'>) => JSON.stringify([normalize(location.name.replace(/\s+/g, ' ')), normalize(location.block.replace(/\s+/g, ' '))]);
 export function validateAsset(asset: Asset, assets: Asset[]) {
  if (!asset.name.trim()) throw new Error('La descripción está vacía. Guarda el registro como “Activo por identificar” y complétala después.');
  if (!Number.isSafeInteger(asset.quantity) || asset.quantity < 1) throw new Error('La cantidad debe ser un entero mayor que cero.');

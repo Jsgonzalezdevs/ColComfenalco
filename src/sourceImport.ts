@@ -1,5 +1,5 @@
 import type { Asset } from './domain';
-import { normalize } from './domain';
+import { locationKey, normalize } from './domain';
 import { supabase } from './repository';
 import { buildEnrichmentPlan } from './sourceEnrichment';
 import type { LocationProposal, PersonProposal, SourceAssignment, SourceDocument, SourceEntry } from './sourceEnrichment';
@@ -70,14 +70,15 @@ async function ensureCatalog<T extends PersonProposal | LocationProposal>(kind: 
   const select = kind === 'people' ? 'id,name,position' : 'id,name,block';
   const result = await supabase.from(kind).select(select);
   if (result.error) throw result.error;
-  const ids = new Map<string, string>((result.data || []).map((item: { id: string; name: string }) => [normalize(item.name), item.id]));
-  const missing = [...proposals].filter(([key]) => !ids.has(key)).map(([, item]) => ({ id: crypto.randomUUID(), ...item }));
+  const keyFor = (item: { name: string; block?: string }) => kind === 'locations' ? locationKey({ name: item.name, block: item.block || 'Colegio' }) : normalize(item.name);
+  const ids = new Map<string, string>((result.data || []).map((item: { id: string; name: string; block?: string }) => [keyFor(item), item.id]));
+  const missing = [...proposals].filter(([, item]) => !ids.has(keyFor(item))).map(([, item]) => ({ id: crypto.randomUUID(), ...item }));
   let created = 0;
   for (let start = 0; start < missing.length; start += batchSize) {
     const inserted = await supabase.from(kind).insert(missing.slice(start, start + batchSize)).select(select);
     if (inserted.error) throw inserted.error;
     created += inserted.data?.length || 0;
-    for (const item of inserted.data || []) ids.set(normalize(item.name), item.id);
+    for (const item of inserted.data || []) ids.set(keyFor(item), item.id);
   }
   return { ids, created };
 }
@@ -99,7 +100,7 @@ async function fillMissingAssignments(candidates: SourceEntry[], plan: ReturnTyp
       if (!asset) continue;
       const assignment = plan.assignments.get(entry.id) || {};
       const personId = assignment.person ? peopleIds.get(normalize(assignment.person.name)) || null : null;
-      const locationId = assignment.location ? locationIds.get(normalize(assignment.location.name)) || null : null;
+      const locationId = assignment.location ? locationIds.get(locationKey(assignment.location)) || null : null;
       if (asset.person_id && personId && asset.person_id !== personId) conflicts++;
       if (asset.status !== 'Por validar' && asset.location_id && locationId && asset.location_id !== locationId) conflicts++;
       const nextPersonId = asset.person_id || personId;
@@ -136,9 +137,9 @@ async function removeUnusedLegacyLocations(plan: ReturnType<typeof buildEnrichme
   if (!supabase) throw new Error('No hay conexión con la base de datos.');
   // Legacy names were intentionally excluded from the new location catalog, so
   // resolve them against the existing rows before checking whether they are safe to remove.
-  const existing = await supabase.from('locations').select('id,name');
+  const existing = await supabase.from('locations').select('id,name,block');
   if (existing.error) throw existing.error;
-  const idsByName = new Map((existing.data || []).map((location: { id: string; name: string }) => [normalize(location.name), location.id]));
+  const idsByName = new Map((existing.data || []).map((location: { id: string; name: string; block: string }) => [locationKey(location), location.id]));
   const ids = [...plan.legacyLocations.keys()].map(key => idsByName.get(key)).filter((id): id is string => !!id);
   let removed = 0;
   for (let start = 0; start < ids.length; start += batchSize) {
@@ -181,7 +182,7 @@ export async function importSourceAssets(reviewDueDate: string, onProgress: (don
         if (!document) throw new Error('Uno de los registros no tiene archivo de origen. No se importó ese lote.');
         const assignment = plan.assignments.get(entry.id) || {};
         const personId = assignment.person ? people.ids.get(normalize(assignment.person.name)) || null : null;
-        const locationId = assignment.location ? locations.ids.get(normalize(assignment.location.name)) || null : null;
+        const locationId = assignment.location ? locations.ids.get(locationKey(assignment.location)) || null : null;
         if (assignment.person && !personId) failedLinks.push(`Responsable: ${assignment.person.name}`);
         if (assignment.location && !locationId) failedLinks.push(`Ubicación: ${assignment.location.name}`);
         return sourceAssetDraft(entry, document, reviewDueDate, assignment, personId, locationId);

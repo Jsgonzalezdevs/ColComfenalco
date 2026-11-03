@@ -1,4 +1,4 @@
-import { normalize } from './domain';
+import { locationKey, normalize } from './domain';
 
 export type SourceDocument = { id: string; path: string; category: string; format?: string; byte_size?: number };
 export type SourceEntry = { id: string; document_id: string; ordinal: number; locator: string; kind: string; payload: Record<string, unknown>; text: string };
@@ -43,8 +43,9 @@ const addPerson = (map: Map<string, PersonProposal>, person: PersonProposal) => 
 const addLocation = (map: Map<string, LocationProposal>, location: LocationProposal) => {
   const name = clean(location.name).slice(0, 180);
   if (!name) return;
-  const key = normalize(name);
-  if (!map.has(key)) map.set(key, { name, block: clean(location.block).slice(0, 120) || 'Colegio' });
+  const block = clean(location.block).slice(0, 120) || 'Colegio';
+  const key = locationKey({ name, block });
+  if (!map.has(key)) map.set(key, { name, block });
 };
 const canonicalLocation = (values: string[]): LocationProposal | undefined => {
   const unique = [...new Map(values.map(value => [normalize(value), clean(value)])).values()].filter(Boolean);
@@ -182,7 +183,7 @@ export function buildEnrichmentPlan(entries: SourceEntry[], sourceDocuments: Sou
     const uniqueLocations = new Map<string, LocationProposal>();
     for (const candidate of matches) {
       if (candidate.person) uniquePeople.set(normalize(candidate.person.name), candidate.person);
-      if (candidate.location) uniqueLocations.set(normalize(candidate.location.name), candidate.location);
+      if (candidate.location) uniqueLocations.set(locationKey(candidate.location), candidate.location);
     }
     const propagatedPerson = !assignment.person && uniquePeople.size === 1 ? [...uniquePeople.values()][0] : undefined;
     const propagatedLocation = !assignment.location && uniqueLocations.size === 1 ? [...uniqueLocations.values()][0] : undefined;
