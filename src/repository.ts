@@ -49,7 +49,7 @@ export async function saveCatalog(data:Data, kind:'people'|'locations', item:Per
   const next=fresh[kind].map(row=>editId&&row.id===editId?item:row);
   return persist({...fresh,[kind]:editId?next:[...fresh[kind],item]});
  }
- const existing=await supabase.from(kind).select('id,name');
+ const existing=await supabase.from(kind).select(kind==='locations'?'id,name,block':'id,name');
  if(existing.error) throw existing.error;
  if(editId&&!(existing.data||[]).some((row:{id:string})=>row.id===editId)) throw new Error('Este registro ya no existe. Actualiza la página e inténtalo de nuevo.');
  if(duplicate((existing.data||[]) as Array<Person|Location>)) throw new Error(kind==='locations'?'Ya existe una ubicación con ese nombre en ese bloque.':'Ya existe una persona con ese nombre.');
