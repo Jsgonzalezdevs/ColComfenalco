@@ -143,7 +143,7 @@ async function runQuery(request: Request, env: Env, member: Member) {
         if (table === 'assets' && !keys.includes('updated_at')) keys.push('updated_at');
         if (table === 'assets' && !keys.includes('version')) { next.version = Number(target.version || 0) + 1; keys.push('version'); }
         const sets = keys.map(k => `"${k}"=?`).join(',');
-        writes.push(env.DB.prepare(`UPDATE "${table}" SET ${sets} WHERE id=? AND ${table === 'assets' ? 'version=?' : 'id=?'}`).bind(...keys.map(k=>sqlValue(k,next[k])), target.id, ...(table === 'assets' ? [target.version] : [])));
+        writes.push(env.DB.prepare(`UPDATE "${table}" SET ${sets} WHERE id=?${table === 'assets' ? ' AND version=?' : ''}`).bind(...keys.map(k=>sqlValue(k,next[k])), target.id, ...(table === 'assets' ? [target.version] : [])));
       }
     }
   }
