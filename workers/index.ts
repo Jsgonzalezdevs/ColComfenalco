@@ -107,6 +107,19 @@ async function runQuery(request: Request, env: Env, member: Member) {
   const writes = [] as D1PreparedStatement[];
   const originals = new Map<string, Record<string,unknown>>();
   const updatedAssets: Array<{ asset: Record<string,unknown>; before: Record<string,unknown> | null }> = [];
+  async function validateAssetReferences(row: Record<string,unknown>) {
+    const locationId = row.location_id == null || row.location_id === '' ? null : String(row.location_id);
+    const personId = row.person_id == null || row.person_id === '' ? null : String(row.person_id);
+    if (locationId) {
+      const found = await env.DB.prepare('SELECT 1 AS yes FROM locations WHERE id=?').bind(locationId).first();
+      if (!found) return 'La ubicación seleccionada ya no existe. Actualiza la página y vuelve a elegirla.';
+    }
+    if (personId) {
+      const found = await env.DB.prepare('SELECT 1 AS yes FROM people WHERE id=?').bind(personId).first();
+      if (!found) return 'El responsable seleccionado ya no existe. Actualiza la página y vuelve a elegirlo.';
+    }
+    return null;
+  }
   for (const raw of rows as Record<string,unknown>[]) {
     const row = { ...raw };
     for (const key of Object.keys(row)) if (!columns.includes(key)) return json({ error: 'Campo no disponible.' }, 400);
@@ -114,6 +127,8 @@ async function runQuery(request: Request, env: Env, member: Member) {
     if (table === 'assets') {
       row.created_at ||= now(); row.updated_at = now(); row.version = Number(row.version || 1);
       if (!row.last_action) row.last_action = 'Registro';
+      const referenceError = await validateAssetReferences(row);
+      if (referenceError) return json({ error: referenceError }, 409);
     }
     if (table === 'asset_documents') row.created_at ||= now();
     if (operation === 'insert' || operation === 'upsert') {
@@ -134,6 +149,8 @@ async function runQuery(request: Request, env: Env, member: Member) {
         if (table === 'assets' && row.version !== undefined && Number(target.version) + 1 !== Number(row.version)) continue;
         const next = { ...target, ...row };
         if (table === 'assets') {
+          const referenceError = await validateAssetReferences(next);
+          if (referenceError) return json({ error: referenceError }, 409);
           next.updated_at = now();
           next.last_action = target.location_id !== next.location_id || target.person_id !== next.person_id ? 'Traslado' : (row.last_action || 'Edición');
           updatedAssets.push({ asset: next, before: target });
@@ -147,9 +164,11 @@ async function runQuery(request: Request, env: Env, member: Member) {
       }
     }
   }
+  let saveStage = 'actualizar el activo';
   try {
     for (let i=0;i<writes.length;i+=100) await env.DB.batch(writes.slice(i,i+100));
     if (table === 'assets' && updatedAssets.length) {
+      saveStage = 'registrar el movimiento en el historial';
       const logs = updatedAssets.map(({asset,before}) => env.DB.prepare('INSERT INTO movements(id,asset_id,asset_name,action,note,actor,created_at,before,after) VALUES(?,?,?,?,?,?,?,?,?)').bind(id(), asset.id, asset.name, asset.last_action, asset.action_note || '', member.user_id, now(), before ? JSON.stringify(parseRow(before)) : null, JSON.stringify(parseRow(asset))));
       for (let i=0;i<logs.length;i+=100) await env.DB.batch(logs.slice(i,i+100));
     }
@@ -161,7 +180,13 @@ async function runQuery(request: Request, env: Env, member: Member) {
       const targets = await env.DB.prepare(`SELECT ${selected.map(s=>`"${s}"`).join(',')} FROM "${table}"${filters.sql}`).bind(...filters.values).all<Record<string,unknown>>(); data = (targets.results || []).map(parseRow);
     }
     return json({ data });
-  } catch (error) { return json({ error: errorMessage(error) }, 400); }
+  } catch (error) {
+    const detail = errorMessage(error);
+    const message = detail.includes('FOREIGN KEY constraint failed')
+      ? `No se pudo ${saveStage}: una referencia asociada ya no existe. Actualiza la página y vuelve a intentarlo.`
+      : detail;
+    return json({ error: message }, 400);
+  }
 }
 
 async function handle(request: Request, env: Env): Promise<Response> {
