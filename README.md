@@ -24,7 +24,7 @@ Sin variables de entorno abre una **demostración con información ficticia** y 
 - Trasladar un registro completo y conservar antes/después.
 - Historial automático al registrar o editar, control de versiones para evitar sobreescrituras.
 - CSV compatible con Excel (separador punto y coma), reporte de novedades e impresión / PDF desde el navegador.
-- Acceso por correo/contraseña cuando se configura Supabase; roles viewer, editor y admin.
+- Acceso por correo/contraseña con la API de Cloudflare; roles de consulta, edición y administración.
 
 **Archivos del colegio:** sección exclusiva para administradores. Muestra los 55 documentos originales de forma legible; permite abrir PDF y Word en el navegador y conservar la descarga del original. Las hojas de cálculo se consultan mediante el texto extraído. Ya no muestra coordenadas internas ni bloques JSON en la pantalla.
 
@@ -32,11 +32,13 @@ Sin variables de entorno abre una **demostración con información ficticia** y 
 
 **Actas:** cada ficha permite vincular un acta del archivo original o adjuntar un PDF, Word o imagen de hasta 20 MB. Administradores pueden consultar el contenido dentro del sistema y descargar el archivo original. Los archivos se guardan en D1 como fragmentos de texto.
 
-**Pendiente:** conciliación institucional de las propuestas, aprobación formal de bajas, actas institucionales nuevas, firmas, fotos, edición de catálogos, paginación del inventario confirmado y recuperación de contraseña desde la aplicación. Documentos sí tiene paginación desde la base de datos. Pendiente de baja es un estado de seguimiento, no una aprobación. La impresión es un listado de inventario, no un acta de entrega.
+**Generación de actas:** la sección Actas parte de la plantilla individual compartida y conserva su encabezado institucional, memorando, compromisos, próxima reunión y cuadro de firmas. Carga los activos vinculados a la persona para que se elijan los bienes que se entregan; el sistema añade la relación seleccionada como anexo editable en el mismo Word. Los registros «Por validar», «No encontrado» y «Pendiente de baja» se excluyen inicialmente y se pueden incluir de forma manual después de confirmarlos. El tratamiento «Señor/Señora», la cédula, la fecha y, opcionalmente, el número de acta se completan antes de generar. La vista previa aparece dentro de la aplicación y el DOCX se descarga con espacios para firmar a mano. Para PDF, abre el DOCX en Word y usa Guardar como PDF. La firma digital y el almacenamiento de actas nuevas en el archivo institucional no están implementados.
+
+**Pendiente:** conciliación institucional de las propuestas, aprobación formal de bajas, firma digital, almacenamiento de las actas recién generadas en el archivo institucional, fotos, edición de catálogos, paginación del inventario confirmado y recuperación de contraseña desde la aplicación. Documentos sí tiene paginación desde la base de datos. Pendiente de baja es un estado de seguimiento, no una aprobación. La impresión de reportes es un listado de inventario, independiente del acta de entrega.
 
 ## Datos y documentos en Cloudflare
 
-La nueva arquitectura usa **D1 para todo**: activos, responsables, ubicaciones, movimientos, texto extraído y originales de los documentos. Los originales se codifican en fragmentos pequeños dentro de D1; la API los reconstruye solo después de autenticar a un administrador. Esto conserva la vista previa de Word/PDF sin agregar un servicio de almacenamiento con suscripción propia. La API está en Cloudflare Workers y exige inicio de sesión y rol antes de leer o cambiar información. Las variables públicas del frontend solo contienen la URL de la API.
+La arquitectura activa usa **D1 para todo**: activos, responsables, ubicaciones, movimientos, texto extraído y originales de los documentos. Los originales se codifican en fragmentos pequeños dentro de D1; la API los reconstruye solo después de autenticar a un administrador. Esto conserva la vista previa de Word/PDF sin agregar un servicio de almacenamiento con suscripción propia. La API está en Cloudflare Workers y exige inicio de sesión y rol antes de leer o cambiar información. Las variables públicas del frontend solo contienen la URL de la API. Los SQL de `supabase/` son archivos heredados de una arquitectura anterior; no se ejecutan para desplegar ni operar la versión actual.
 
 El paquete de importación que se preparó para el colegio está fuera del repositorio, en `../preparacion-importacion/importacion-colegio.json`: 55 originales, 7.484 fragmentos y 4.642 filas candidatas a activo. No es un conteo de bienes únicos. El paquete ocupa aproximadamente 13,5 MB y sus originales 5,7 MB. Las filas candidatas entran como **Por validar**, con responsables, ubicaciones y actas asociadas cuando la fuente permite resolverlos. El administrador elige la fecha de revisión al importar. No se debe copiar el paquete ni los documentos a `public/`, `dist/` o Git.
 
@@ -79,7 +81,7 @@ pnpm test
 pnpm build
 ```
 
-Las pruebas cubren duplicidad de placas, unidades/lotes, conflictos de edición, referencias inválidas, historial de traslado y neutralización de fórmulas en CSV. No sustituyen las pruebas de políticas en Supabase.
+Las pruebas cubren duplicidad de placas, unidades/lotes, conflictos de edición, referencias inválidas, historial de traslado y neutralización de fórmulas en CSV. Las reglas de acceso se aplican en el Worker de Cloudflare y en la base D1.
 
 ## Identidad visual
 
@@ -88,7 +90,7 @@ Verde principal `#006830`, acento `#95BF0C`, verde lima `#BFD730`, tomados del C
 - Sitio: https://colegiocomfenalcoibague.edu.co/
 - Paleta: https://colegiocomfenalcoibague.edu.co/wp-content/uploads/elementor/css/post-5.css
 - Escudo: https://colegiocomfenalcoibague.edu.co/wp-content/uploads/2023/10/LOGO_COLEGIO_IBAGU-300x267-1.png
-- Auth: https://supabase.com/docs/guides/auth/quickstarts/react
-- RLS: https://supabase.com/docs/guides/database/postgres/row-level-security
+- Cloudflare Workers: https://developers.cloudflare.com/workers/
+- Cloudflare D1: https://developers.cloudflare.com/d1/
 
-Los archivos fuente del inventario no se modificaron. Sus copias están en las tablas protegidas de Supabase y no se incluyen en el código estático de la aplicación.
+Los archivos fuente del inventario no se modificaron. Sus copias están en las tablas protegidas de D1 y no se incluyen en el código estático de la aplicación.

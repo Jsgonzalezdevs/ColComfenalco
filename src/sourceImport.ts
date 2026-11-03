@@ -103,9 +103,11 @@ async function fillMissingAssignments(candidates: SourceEntry[], plan: ReturnTyp
       if (asset.person_id && personId && asset.person_id !== personId) conflicts++;
       if (asset.status !== 'Por validar' && asset.location_id && locationId && asset.location_id !== locationId) conflicts++;
       const nextPersonId = asset.person_id || personId;
-      // Imported assets remain provisional until their status is validated. Reapply
-      // the corrected source location to those rows, including earlier bad matches.
-      const nextLocationId = asset.status === 'Por validar' && locationId ? locationId : asset.location_id || locationId;
+      // Reapply corrected source locations only while the row is still in its
+      // untouched import state. A user's manual correction must survive retries.
+      const untouchedImport = asset.status === 'Por validar' && asset.last_action === 'Registro'
+        && ['Importado desde los archivos del colegio para validación', 'Asociación inicial completada desde los archivos importados.'].includes(asset.action_note);
+      const nextLocationId = untouchedImport && locationId ? locationId : asset.location_id || locationId;
       if (nextPersonId) linkedPeople++;
       if (nextLocationId) linkedLocations++;
       if (nextPersonId === asset.person_id && nextLocationId === asset.location_id) continue;
@@ -147,7 +149,7 @@ async function removeUnusedLegacyLocations(plan: ReturnType<typeof buildEnrichme
     const unused = group.filter(id => !used.has(id));
     if (!unused.length) continue;
     const result = await supabase.from('locations').delete().in('id', unused).select('id');
-    if (result.error) throw new Error(`Se corrigieron los vínculos de los activos, pero no se pudieron retirar las ubicaciones mezcladas con descripciones de bienes. Ejecuta supabase/cleanup_imported_locations.sql en Supabase y vuelve a intentar. ${result.error.message}`);
+    if (result.error) throw new Error(`Se corrigieron los vínculos de los activos, pero no se pudieron retirar algunas ubicaciones antiguas sin uso. Puedes volver a intentar la importación sin duplicar registros. Detalle: ${result.error.message}`);
     removed += result.data?.length || 0;
   }
   return removed;

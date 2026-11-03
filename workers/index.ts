@@ -17,7 +17,7 @@ const tableColumns: Record<string, string[]> = {
   asset_documents: ['id','asset_id','archive_document_id','storage_path','filename','mime_type','byte_size','preview_text','created_at'],
 };
 const jsonColumns = new Set(['source_data','before','after','payload']);
-const allowedOrigins = new Set(['https://colcomfenalco.vercel.app','http://127.0.0.1:5188','http://localhost:5188']);
+const allowedOrigins = new Set(['https://colcomfenalco.vercel.app','http://127.0.0.1:5173','http://localhost:5173','http://127.0.0.1:5188','http://localhost:5188']);
 const json = (data: unknown, status = 200, origin = '') => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...(origin && allowedOrigins.has(origin) ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Setup-Token', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Vary': 'Origin' } : {}) } });
 const encode = (data: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(data)));
 const decode = (value: string) => Uint8Array.from(atob(value), c => c.charCodeAt(0));
