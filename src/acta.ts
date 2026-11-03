@@ -65,7 +65,7 @@ export async function createActaDocx(details: ActaDetails, data: Data): Promise<
     actNumber: details.actNumber.trim(),
     ...date,
     assets: details.assets.map(asset => ({
-      plate: asset.plate?.trim() || 'SIN PLACA',
+      plate: asset.plate?.trim() || (asset.source_data?.plate_enabled === true ? '' : 'SIN PLACA'),
       description: asset.name.trim(),
       category: asset.category?.trim() || 'Sin clasificar',
       location: asset.location_id ? locations.get(asset.location_id) || 'Sin ubicación registrada' : 'Sin ubicación registrada',
