@@ -1,6 +1,6 @@
 import type { Data, Asset, Person, Location } from './domain';
 import { createDemo } from './demo';
-import { saveLocal } from './domain';
+import { normalize, saveLocal } from './domain';
 import { cloudflare } from './cloudflareClient';
 const env = import.meta.env;
 export const configured = Boolean(env.VITE_API_URL);
@@ -40,7 +40,20 @@ export async function saveAsset(data: Data, asset: Asset) {
  return loadData();
 }
 function readDemoPersisted(fallback:Data) { return localStorage.getItem(KEY) ? readDemo() : fallback; }
-export async function saveCatalog(data:Data, kind:'people'|'locations', item:Person|Location) {
- if (!supabase) { const fresh=readDemoPersisted(data); if(fresh[kind].some(x=>x.name.trim().toLowerCase()===item.name.trim().toLowerCase())) throw new Error('Este nombre ya existe.'); return persist({...fresh,[kind]:[...fresh[kind],item]}); }
- const result = kind==='people' ? await supabase.from('people').insert(item as Person) : await supabase.from('locations').insert(item as Location); if(result.error) throw result.error; return loadData();
+export async function saveCatalog(data:Data, kind:'people'|'locations', item:Person|Location, editId?:string) {
+ const duplicate = (rows:Array<Person|Location>) => rows.some(row => row.id !== editId && normalize(row.name) === normalize(item.name));
+ if (!supabase) {
+  const fresh=readDemoPersisted(data);
+  if(editId&&!fresh[kind].some(row=>row.id===editId)) throw new Error('Este registro ya no existe. Actualiza la página e inténtalo de nuevo.');
+  if(duplicate(fresh[kind])) throw new Error(kind==='locations'?'Ya existe una ubicación con ese nombre.':'Ya existe una persona con ese nombre.');
+  const next=fresh[kind].map(row=>editId&&row.id===editId?item:row);
+  return persist({...fresh,[kind]:editId?next:[...fresh[kind],item]});
+ }
+ const existing=await supabase.from(kind).select('id,name');
+ if(existing.error) throw existing.error;
+ if(editId&&!(existing.data||[]).some((row:{id:string})=>row.id===editId)) throw new Error('Este registro ya no existe. Actualiza la página e inténtalo de nuevo.');
+ if(duplicate((existing.data||[]) as Array<Person|Location>)) throw new Error(kind==='locations'?'Ya existe una ubicación con ese nombre.':'Ya existe una persona con ese nombre.');
+ if(editId){const {id:_id,...fields}=item;const result=await supabase.from(kind).update(fields).eq('id',editId).select('id');if(result.error)throw result.error;if(!result.data?.length)throw new Error('No se pudo actualizar el registro. Actualiza la página e inténtalo de nuevo.');}
+ else {const result=kind==='people'?await supabase.from('people').insert(item as Person):await supabase.from('locations').insert(item as Location);if(result.error)throw result.error;}
+ return loadData();
 }

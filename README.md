@@ -21,6 +21,7 @@ Sin variables de entorno abre una **demostración con información ficticia** y 
 - Crear y editar activos con placa individual o lotes sin placa.
 - El formulario de activos no obliga a completar campos; lo que falte queda pendiente de validar.
 - La placa se activa con el botón «¿Tiene placa?»; si no se activa, el activo queda registrado sin placa.
+- Las ubicaciones se pueden editar sin perder los activos asociados.
 - Buscar por descripción, placa, categoría o responsable y filtrar por estado/ubicación.
 - Crear responsables y ubicaciones; consultar sus activos.
 - Trasladar un registro completo y conservar antes/después.
@@ -36,7 +37,7 @@ Sin variables de entorno abre una **demostración con información ficticia** y 
 
 **Generación de actas:** la sección Actas parte de la plantilla individual compartida y conserva su encabezado institucional, memorando, compromisos, próxima reunión y cuadro de firmas. Carga los activos vinculados a la persona para que se elijan los bienes que se entregan; el sistema añade la relación seleccionada como anexo editable en el mismo Word. Los registros «Por validar», «No encontrado» y «Pendiente de baja» se excluyen inicialmente y se pueden incluir de forma manual después de confirmarlos. El tratamiento «Señor/Señora», la cédula, la fecha y, opcionalmente, el número de acta se completan antes de generar. La vista previa aparece dentro de la aplicación y el DOCX se descarga con espacios para firmar a mano. Para PDF, abre el DOCX en Word y usa Guardar como PDF. La firma digital y el almacenamiento de actas nuevas en el archivo institucional no están implementados.
 
-**Pendiente:** conciliación institucional de las propuestas, aprobación formal de bajas, firma digital, almacenamiento de las actas recién generadas en el archivo institucional, fotos, edición de catálogos, paginación del inventario confirmado y recuperación de contraseña desde la aplicación. Documentos sí tiene paginación desde la base de datos. Pendiente de baja es un estado de seguimiento, no una aprobación. La impresión de reportes es un listado de inventario, independiente del acta de entrega.
+**Pendiente:** conciliación institucional de las propuestas, aprobación formal de bajas, firma digital, almacenamiento de las actas recién generadas en el archivo institucional, fotos, edición de responsables, paginación del inventario confirmado y recuperación de contraseña desde la aplicación. Las ubicaciones sí se pueden editar. Documentos tiene paginación desde la base de datos. Pendiente de baja es un estado de seguimiento, no una aprobación. La impresión de reportes es un listado de inventario, independiente del acta de entrega.
 
 ## Datos y documentos en Cloudflare
 

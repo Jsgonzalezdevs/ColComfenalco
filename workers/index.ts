@@ -157,8 +157,8 @@ async function runQuery(request: Request, env: Env, member: Member) {
     if (query.operation !== 'update' && query.operation !== 'delete') {
       const ids = (rows as Record<string,unknown>[]).map(row => row.id).filter(Boolean);
       if (ids.length) { const placeholders = ids.map(()=>'?').join(','); const saved = await env.DB.prepare(`SELECT ${selected.map(s=>`"${s}"`).join(',')} FROM "${table}" WHERE id IN (${placeholders})`).bind(...ids).all<Record<string,unknown>>(); data = (saved.results || []).map(parseRow); }
-    } else if (table === 'assets') {
-      const targets = await env.DB.prepare(`SELECT ${selected.map(s=>`"${s}"`).join(',')} FROM assets${filters.sql}`).bind(...filters.values).all<Record<string,unknown>>(); data = (targets.results || []).map(parseRow);
+    } else if (query.operation === 'update') {
+      const targets = await env.DB.prepare(`SELECT ${selected.map(s=>`"${s}"`).join(',')} FROM "${table}"${filters.sql}`).bind(...filters.values).all<Record<string,unknown>>(); data = (targets.results || []).map(parseRow);
     }
     return json({ data });
   } catch (error) { return json({ error: errorMessage(error) }, 400); }
