@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "comfenalco-activos-api",
+  "account_id": "1718130da542ec913f172c5e43e53f78",
+  "main": "workers/index.ts",
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "vars": {},
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "comfenalco-activos",
+      "database_id": "1b7187a6-9530-4275-8a70-ca1bc0616a2a",
+      "migrations_dir": "workers/migrations"
+    }
+  ]
+}

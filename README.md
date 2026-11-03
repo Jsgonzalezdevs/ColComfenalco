@@ -30,63 +30,47 @@ Sin variables de entorno abre una **demostración con información ficticia** y 
 
 **Importación guiada:** los 4.642 registros detectados se pueden agregar al inventario con una fecha de próxima revisión elegida por el administrador. Cada registro queda como «Por validar»; no se inventan placas, estados, ubicaciones ni responsables. Se conservan todos los campos de origen, las repeticiones y los datos que requieren conciliación. La importación se puede reintentar sin duplicar filas.
 
-**Actas:** cada ficha permite vincular un acta del archivo original o adjuntar un PDF, Word o imagen de hasta 20 MB. Administradores pueden consultar el contenido dentro del sistema y descargar el archivo original. Los documentos nuevos se guardan en un bucket privado.
+**Actas:** cada ficha permite vincular un acta del archivo original o adjuntar un PDF, Word o imagen de hasta 20 MB. Administradores pueden consultar el contenido dentro del sistema y descargar el archivo original. Los archivos se guardan en D1 como fragmentos de texto.
 
 **Pendiente:** conciliación institucional de las propuestas, aprobación formal de bajas, actas institucionales nuevas, firmas, fotos, edición de catálogos, paginación del inventario confirmado y recuperación de contraseña desde la aplicación. Documentos sí tiene paginación desde la base de datos. Pendiente de baja es un estado de seguimiento, no una aprobación. La impresión es un listado de inventario, no un acta de entrega.
 
-## Archivo completo de las fuentes
+## Datos y documentos en Cloudflare
 
-El 22 de octubre de 2026 se cargaron y verificaron en el proyecto de la aplicación **55 originales y 7.484 fragmentos**, incluidos los dos Excel antiguos `.xls` y las imágenes con texto de los Word. Se identificaron 4.642 filas que podrían describir activos; esta cifra no es un total de bienes únicos. Las copias temporales `~$` de Office no son documentos fuente y se excluyeron (3 archivos). Los originales locales no se modificaron.
+La nueva arquitectura usa **D1 para todo**: activos, responsables, ubicaciones, movimientos, texto extraído y originales de los documentos. Los originales se codifican en fragmentos pequeños dentro de D1; la API los reconstruye solo después de autenticar a un administrador. Esto conserva la vista previa de Word/PDF sin agregar un servicio de almacenamiento con suscripción propia. La API está en Cloudflare Workers y exige inicio de sesión y rol antes de leer o cambiar información. Las variables públicas del frontend solo contienen la URL de la API.
 
-Las tablas `archive_documents`, `archive_originals` y `archive_entries` tienen RLS y acceso exclusivo para `members.role = 'admin'`. No se conceden permisos de modificación o eliminación de documentos ya archivados. El RPC `import_archive_document` es SECURITY INVOKER, valida el original y sus filas en una sola transacción por documento y permite reintentar el mismo paquete sin duplicarlo. Un paquete interrumpido puede reanudarse. El archivo original completo se guarda codificado en base64, incluso si tiene elementos que el extractor no interpreta.
+El paquete de importación que se preparó para el colegio está fuera del repositorio, en `../preparacion-importacion/importacion-colegio.json`: 55 originales, 7.484 fragmentos y 4.642 filas candidatas a activo. No es un conteo de bienes únicos. El paquete ocupa aproximadamente 13,5 MB y sus originales 5,7 MB. Las filas candidatas entran como **Por validar**, con responsables, ubicaciones y actas asociadas cuando la fuente permite resolverlos. El administrador elige la fecha de revisión al importar. No se debe copiar el paquete ni los documentos a `public/`, `dist/` o Git.
 
-Para un proyecto nuevo, ejecutar primero `supabase/setup.sql` y luego `supabase/archive.sql`, una sola vez. La actualización aditiva `supabase/review_and_documents.sql` habilita los registros pendientes, las fechas de revisión y los documentos privados por activo; ya fue aplicada en el proyecto actual. Los archivos originales y paquetes de importación contienen información interna: **no copiarlos a `public/`, `dist/` ni al repositorio**. La interfaz recibe los datos después de autenticar y autorizar al administrador.
+### Aprovisionar el servicio
 
-Herramientas de preparación: `scripts/prepare_import.py` usa Python con openpyxl, xlrd 2.0.2, python-docx y pypdf. Acepta carpeta fuente, carpeta de salida privada y, opcionalmente, el JSONL de OCR generado con `scripts/ocr_images.swift` (macOS Vision; requiere un SDK compatible con el compilador). La extracción conserva los valores, las fórmulas Excel y las coordenadas de origen; el OCR se marca siempre para revisión. Las propuestas no eligen entre descripciones contradictorias ni resuelven responsables o traslados por su cuenta.
+Conectar la cuenta Cloudflare en esta máquina y ejecutar desde esta carpeta:
 
-`scripts/upload_archive.py` carga el paquete con una sesión temporal de administrador desde fuera del repositorio y después compara todos los originales y filas descargados contra el paquete local. No necesita una clave service_role. `scripts/check_archive_sql.mjs` verifica con PostgreSQL local/PGlite la carga íntegra, reintentos, rechazo de alteraciones y acceso denegado a viewer, no miembro y anon. También se verificó en la API real que los visitantes sin sesión no pueden consultar las tres tablas.
-
-## Conectar Supabase
-
-1. Crear un proyecto nuevo. Ejecutar `supabase/setup.sql` en SQL Editor, una sola vez. El script es de instalación, no una migración incremental; no ejecutarlo sobre un proyecto con tablas del mismo nombre.
-2. En Authentication, deshabilitar el registro público y los inicios anónimos. Crear/invitar los usuarios autorizados desde el panel de Supabase. Si se usa invitación, completar el flujo de contraseña en un cliente que lo soporte; esta versión solo implementa ingreso con contraseña ya establecida.
-3. Copiar el UUID del usuario y autorizarlo desde SQL Editor:
-
-```sql
-insert into public.members (user_id, role)
-values ('UUID-DEL-USUARIO', 'admin');
+```sh
+pnpm install --frozen-lockfile
+pnpm exec wrangler login
+pnpm exec wrangler d1 create comfenalco-activos
 ```
 
-Roles: `viewer` consulta y exporta; `editor` y `admin` registran y actualizan. La gestión de miembros queda exclusivamente en el panel/SQL; no hay interfaz administrativa de roles todavía.
+El `database_id` devuelto debe quedar en `wrangler.jsonc`. Después ejecutar:
 
-4. Copiar `.env.example` a `.env.local` y completar:
-
-```env
-VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=TU-CLAVE-PUBLICABLE
+```sh
+pnpm exec wrangler d1 migrations apply comfenalco-activos --remote
+pnpm exec wrangler secret put BOOTSTRAP_TOKEN
+pnpm exec wrangler deploy
 ```
 
-Usar la clave **publishable**. Nunca poner `service_role`, claves secretas o contraseña de la base de datos en el frontend. Reiniciar el servidor después de cambiar las variables.
-5. Ingresar, crear una ubicación y un responsable, registrar un activo, trasladarlo y comprobar el historial. La base compartida inicia vacía y nunca recibe automáticamente los datos de demostración.
+Luego configurar la URL `https://comfenalco-activos-api.<cuenta>.workers.dev` como `VITE_API_URL` en el proyecto Vercel y volver a desplegar el frontend. La primera cuenta se crea una sola vez llamando `POST /api/auth/setup` con el secreto temporal `X-Setup-Token`, correo y contraseña segura; después se elimina el secreto con `pnpm exec wrangler secret delete BOOTSTRAP_TOKEN`. No hay registro público.
 
-### Seguridad y verificación pendiente
+La base D1 queda guardada al terminar las consultas; no depende de mantener un servidor encendido. El plan gratuito publicado actualmente incluye hasta 500 MB por base de datos y 5 GB totales, con límites diarios de lectura/escritura; Workers limita además las solicitudes gratuitas. Cada fragmento de archivo queda por debajo del máximo de 2 MB por fila de D1. Si se exceden los límites diarios, las consultas pueden fallar hasta que se restablezcan; los datos guardados no se borran.
 
-Todas las tablas tienen RLS. Los usuarios solo acceden si están en `members`; nadie puede autoasignarse un rol desde la API. No hay permisos de borrado de activos ni escritura directa del historial. El disparador privado escribe la bitácora en la misma transacción, fija usuario/fecha y exige una versión consecutiva. El cliente actualiza con el filtro `id + version` para detectar conflictos.
+### Importar el archivo del colegio
 
-Antes de uso institucional del inventario consolidado, completar las pruebas de editor con escritura, bitácora inmutable, traslado y conflicto entre dos sesiones contra la instancia real. El archivo documental ya fue cargado y verificado con acceso admin y bloqueo anónimo. Las políticas de viewer/no miembro y la integridad del RPC de archivo también se probaron en PostgreSQL local. Quedan pendientes los asesores de Supabase: la conexión MCP disponible no tiene acceso a este proyecto. No se requiere un servidor Render adicional para esta arquitectura.
+Una vez que exista la cuenta administradora, entrar a **Documentos**, seleccionar el paquete privado `importacion-colegio.json` y escoger la fecha de próxima revisión. La importación es reintentable; al terminar debe mostrar 55 documentos originales y 7.484 fragmentos, y dejar los registros candidatos pendientes de validar. El archivo original se verifica con SHA-256 antes de guardarlo en D1.
 
-## Publicar en Vercel
+La demo local permanece disponible cuando `VITE_API_URL` no está definida; usa información ficticia en el navegador. Para apuntar el desarrollo local al Worker, ejecutar `pnpm dev:api` y configurar `VITE_API_URL=http://127.0.0.1:8787` en `.env.local`.
 
-- Subir solamente esta carpeta como repositorio, sin `.env.local` ni documentos originales.
-- Si se sube la carpeta padre, elegir `inventario-comfenalco` como Root Directory.
-- Framework: Vite; build `pnpm build`; salida `dist`; Node 22.12+ (preferiblemente 24 LTS compatible con el alojamiento).
-- Definir las dos variables VITE anteriores antes de compilar. `vercel.json` contiene la configuración base.
-- En Supabase Auth, configurar Site URL con la URL publicada. No configurar variables secretas en el navegador.
-- Volver a desplegar si cambian las variables: Vite las incorpora durante la compilación.
+## Publicación
 
-## Alternativa Render
-
-`render.yaml` describe un Static Site. Seleccionar esta carpeta como raíz si el repositorio contiene más carpetas. Configurar las mismas variables. **Elegir Vercel o Render para la web**; Supabase proporciona base de datos y autenticación. Mantener ambos alojamientos no aporta funcionalidad a esta primera versión.
+El frontend sigue en Vercel; Render solo se conserva como configuración alternativa de sitio estático. La API y la base viven en Cloudflare. No publicar un frontend con `VITE_API_URL` apuntando a una base nueva vacía antes de completar el aprovisionamiento y la importación.
 
 ## Verificar
 

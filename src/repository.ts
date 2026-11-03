@@ -1,10 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
 import type { Data, Asset, Person, Location } from './domain';
 import { createDemo } from './demo';
 import { saveLocal } from './domain';
+import { cloudflare } from './cloudflareClient';
 const env = import.meta.env;
-export const configured = Boolean(env.VITE_SUPABASE_URL && env.VITE_SUPABASE_PUBLISHABLE_KEY);
-export const supabase = configured ? createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_PUBLISHABLE_KEY) : null;
+export const configured = Boolean(env.VITE_API_URL);
+export const supabase = configured ? cloudflare : null;
 const KEY = 'comfenalco-demo-v1';
 export function readDemo(): Data {
  const raw = localStorage.getItem(KEY);

@@ -5,24 +5,28 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && tsc -p workers/tsconfig.json && vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "dev:api": "wrangler dev",
+    "deploy:api": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply comfenalco-activos --local",
     "test": "vitest run"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.118.0",
     "docx-preview": "0.4.1",
     "lucide-react": "1.61.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20261102.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
     "typescript": "7.0.2",
     "vite": "8.3.5",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "wrangler": "4.119.0"
   },
   "engines": {
     "node": ">=22.12.0"

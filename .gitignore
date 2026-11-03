@@ -1,7 +1,9 @@
 node_modules/
 dist/
+.wrangler/
 .env
 .env.*
 !.env.example
+!.env.production
 *.tsbuildinfo
 .DS_Store

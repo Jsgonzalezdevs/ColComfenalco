@@ -68,9 +68,12 @@ export async function downloadOriginal(document:ArchiveDocument){
 }
 export async function getOriginalBlob(document:ArchiveDocument){
  if(!supabase)throw new Error('No hay conexión.');
- const result=await supabase.from('archive_originals').select('original_base64').eq('document_id',document.id).single();
+ const result=await supabase.storage.from('archive-originals').download(document.id);
  if(result.error)throw result.error;
- const bytes=await verifyOriginal(document,result.data.original_base64);
+ const bytes=new Uint8Array(await result.data.arrayBuffer());
+ const digest=await crypto.subtle.digest('SHA-256',bytes);
+ const sha=Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+ if(bytes.length!==document.byte_size||sha!==document.sha256)throw new Error('El original no coincide: '+document.path);
  const mime:Record<string,string>={pdf:'application/pdf',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',xls:'application/vnd.ms-excel'};
  return new Blob([bytes],{type:mime[document.format.toLowerCase()]||'application/octet-stream'});
 }

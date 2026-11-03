@@ -70,7 +70,7 @@ async function ensureCatalog<T extends PersonProposal | LocationProposal>(kind: 
   const select = kind === 'people' ? 'id,name,position' : 'id,name,block';
   const result = await supabase.from(kind).select(select);
   if (result.error) throw result.error;
-  const ids = new Map((result.data || []).map((item: { id: string; name: string }) => [normalize(item.name), item.id]));
+  const ids = new Map<string, string>((result.data || []).map((item: { id: string; name: string }) => [normalize(item.name), item.id]));
   const missing = [...proposals].filter(([key]) => !ids.has(key)).map(([, item]) => ({ id: crypto.randomUUID(), ...item }));
   let created = 0;
   for (let start = 0; start < missing.length; start += batchSize) {
@@ -92,7 +92,7 @@ async function fillMissingAssignments(candidates: SourceEntry[], plan: ReturnTyp
     const rows = candidates.slice(start, start + batchSize);
     const result = await supabase.from('assets').select('*').in('source_entry_id', rows.map(entry => entry.id));
     if (result.error) throw result.error;
-    const assetByEntry = new Map((result.data || []).map((asset: Asset) => [asset.source_entry_id, asset]));
+    const assetByEntry = new Map<string | null | undefined, Asset>((result.data || []).map((asset: Asset) => [asset.source_entry_id, asset]));
     const updates = new Map<string, { version: number; personId: string | null; locationId: string | null; ids: string[] }>();
     for (const entry of rows) {
       const asset = assetByEntry.get(entry.id);
