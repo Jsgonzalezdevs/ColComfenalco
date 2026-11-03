@@ -19,6 +19,7 @@ Sin variables de entorno abre una **demostración con información ficticia** y 
 
 - Panel con unidades, registros, estados y distribución por área.
 - Crear y editar activos con placa individual o lotes sin placa.
+- El formulario de activos no obliga a completar campos; lo que falte queda pendiente de validar.
 - Buscar por descripción, placa, categoría o responsable y filtrar por estado/ubicación.
 - Crear responsables y ubicaciones; consultar sus activos.
 - Trasladar un registro completo y conservar antes/después.

@@ -7,7 +7,7 @@ export type Movement = { id: string; asset_id: string; asset_name: string; actio
 export type Data = { assets: Asset[]; people: Person[]; locations: Location[]; movements: Movement[] };
 export const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 export function validateAsset(asset: Asset, assets: Asset[]) {
- if (!asset.name.trim()) throw new Error('Escribe la descripción del activo.');
+ if (!asset.name.trim()) throw new Error('La descripción está vacía. Guarda el registro como “Activo por identificar” y complétala después.');
  if (!Number.isSafeInteger(asset.quantity) || asset.quantity < 1) throw new Error('La cantidad debe ser un entero mayor que cero.');
  if (!asset.location_id && !['Por validar', 'No encontrado'].includes(asset.status)) throw new Error('Selecciona una ubicación para confirmar el estado del activo.');
  if (!statuses.includes(asset.status)) throw new Error('Selecciona un estado válido.');
