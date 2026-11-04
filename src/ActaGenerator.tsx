@@ -48,7 +48,7 @@ export default function ActaGenerator({ data, canEdit }: { data: Data; canEdit: 
 
   function selectPerson(id: string) {
     setPersonId(id);
-    setSelectedAssets(data.assets.filter(asset => asset.person_id === id && !['Por validar', 'No encontrado', 'Pendiente de baja'].includes(asset.status)).map(asset => asset.id));
+    setSelectedAssets(data.assets.filter(asset => asset.person_id === id).map(asset => asset.id));
     clearOutput();
     setError('');
   }
