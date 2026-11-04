@@ -106,6 +106,7 @@ async function runQuery(request: Request, env: Env, member: Member) {
   if (rows.length > 500) return json({ error: 'Envía lotes de 500 registros o menos.' }, 413);
   const writes = [] as D1PreparedStatement[];
   const originals = new Map<string, Record<string,unknown>>();
+  const updatedIds: string[] = [];
   const updatedAssets: Array<{ asset: Record<string,unknown>; before: Record<string,unknown> | null }> = [];
   async function validateAssetReferences(row: Record<string,unknown>) {
     const locationId = row.location_id == null || row.location_id === '' ? null : String(row.location_id);
@@ -161,6 +162,7 @@ async function runQuery(request: Request, env: Env, member: Member) {
         if (table === 'assets' && !keys.includes('version')) { next.version = Number(target.version || 0) + 1; keys.push('version'); }
         const sets = keys.map(k => `"${k}"=?`).join(',');
         writes.push(env.DB.prepare(`UPDATE "${table}" SET ${sets} WHERE id=?${table === 'assets' ? ' AND version=?' : ''}`).bind(...keys.map(k=>sqlValue(k,next[k])), target.id, ...(table === 'assets' ? [target.version] : [])));
+        updatedIds.push(String(target.id));
       }
     }
   }
@@ -177,7 +179,12 @@ async function runQuery(request: Request, env: Env, member: Member) {
       const ids = (rows as Record<string,unknown>[]).map(row => row.id).filter(Boolean);
       if (ids.length) { const placeholders = ids.map(()=>'?').join(','); const saved = await env.DB.prepare(`SELECT ${selected.map(s=>`"${s}"`).join(',')} FROM "${table}" WHERE id IN (${placeholders})`).bind(...ids).all<Record<string,unknown>>(); data = (saved.results || []).map(parseRow); }
     } else if (query.operation === 'update') {
-      const targets = await env.DB.prepare(`SELECT ${selected.map(s=>`"${s}"`).join(',')} FROM "${table}"${filters.sql}`).bind(...filters.values).all<Record<string,unknown>>(); data = (targets.results || []).map(parseRow);
+      for (let i=0;i<updatedIds.length;i+=100) {
+        const batchIds = updatedIds.slice(i,i+100);
+        const placeholders = batchIds.map(()=>'?').join(',');
+        const saved = await env.DB.prepare(`SELECT ${selected.map(s=>`"${s}"`).join(',')} FROM "${table}" WHERE id IN (${placeholders})`).bind(...batchIds).all<Record<string,unknown>>();
+        data.push(...(saved.results || []).map(parseRow));
+      }
     }
     return json({ data });
   } catch (error) {
