@@ -5,6 +5,7 @@ export type Location = { id: string; name: string; block: string };
 export type Asset = { id: string; plate: string | null; name: string; category: string; location_id: string | null; person_id: string | null; quantity: number; status: Status; notes: string; version: number; last_action: string; action_note: string; created_at: string; updated_at: string; review_due_date?: string | null; last_reviewed_at?: string | null; source_entry_id?: string | null; source_document_id?: string | null; source_data?: Record<string, unknown> };
 export type Movement = { id: string; asset_id: string; asset_name: string; action: string; note: string; created_at: string; actor: string; before: Asset | null; after: Asset };
 export type Data = { assets: Asset[]; people: Person[]; locations: Location[]; movements: Movement[] };
+export const formatLocation = (location?: Pick<Location, 'name' | 'block'> | null) => location ? [location.block.trim(), location.name.trim()].filter(Boolean).join(' · ') || 'Sin ubicación' : 'Sin ubicación';
 export const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 export const locationKey = (location: Pick<Location, 'name' | 'block'>) => JSON.stringify([normalize(location.name.replace(/\s+/g, ' ')), normalize(location.block.replace(/\s+/g, ' '))]);
 export function validateAsset(asset: Asset, assets: Asset[]) {
@@ -32,7 +33,7 @@ export function csvCell(value: unknown) {
 export function inventoryCsv(data: Data, assets = data.assets) {
  const rows = [['Placa confirmada','Placa en archivo','Descripción','Categoría','Ubicación','Responsable','Cantidad','Cantidad en archivo','Estado','Estado en archivo','Próxima revisión','Archivo de origen','Observaciones'], ...assets.map(a => {
   const source = a.source_data?.proposal as { plate_as_written?: unknown; quantity_as_written?: unknown; status_as_written?: unknown } | undefined;
-  return [a.plate || (a.source_data?.plate_enabled === true ? '' : 'SIN PLACA'), source?.plate_as_written ?? '', a.name, a.category, data.locations.find(l => l.id === a.location_id)?.name || '', data.people.find(p => p.id === a.person_id)?.name || '', a.quantity, source?.quantity_as_written ?? '', a.status, source?.status_as_written ?? '', a.review_due_date || '', a.source_data?.source_document || '', a.notes];
+  return [a.plate || (a.source_data?.plate_enabled === true ? '' : 'SIN PLACA'), source?.plate_as_written ?? '', a.name, a.category, formatLocation(data.locations.find(l => l.id === a.location_id)), data.people.find(p => p.id === a.person_id)?.name || '', a.quantity, source?.quantity_as_written ?? '', a.status, source?.status_as_written ?? '', a.review_due_date || '', a.source_data?.source_document || '', a.notes];
  })];
  return '\uFEFF' + rows.map(r => r.map(csvCell).join(';')).join('\r\n');
 }

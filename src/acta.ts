@@ -1,6 +1,7 @@
 import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
 import type { Asset, Data, Person } from './domain';
+import { formatLocation } from './domain';
 
 export type ActaDetails = {
   recipient: Person;
@@ -52,7 +53,7 @@ export async function createActaDocx(details: ActaDetails, data: Data): Promise<
   const recipientName = details.recipient.name.trim().toLocaleUpperCase('es-CO');
   const recipientRoleUpper = details.recipient.position.trim().toLocaleUpperCase('es-CO');
   const recipientRolePhrase = positionWithArticle(details);
-  const locations = new Map(data.locations.map(location => [location.id, location.name]));
+  const locations = new Map(data.locations.map(location => [location.id, formatLocation(location)]));
 
   doc.render({
     recipientName,
