@@ -166,6 +166,9 @@ async function runQuery(request: Request, env: Env, member: Member) {
       }
     }
   }
+  if (table === 'assets' && operation === 'update' && updatedIds.length === 0) {
+    return json({ error: 'Este activo cambió mientras estaba abierto. Actualiza el formulario e intenta guardar otra vez.' }, 409);
+  }
   let saveStage = 'actualizar el activo';
   try {
     for (let i=0;i<writes.length;i+=100) await env.DB.batch(writes.slice(i,i+100));
